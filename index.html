@@ -1,4 +1,4 @@
-<title>Test Your Vocabulary 1 – Hoa Dũng</title>
+<title>Test Your Vocabulary 1 – DV gia sư&amp; dạy kèm Hoa Dũng</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&family=Lexend:wght@300;400;500;600&display=swap">
@@ -131,6 +131,12 @@ header.top{padding-block:18px 14px}
 .submit .note{flex:1 1 220px;margin:0}
 a.btn{text-decoration:none;display:inline-block}
 a.small-a{padding:4px 10px;font-size:13px}
+.tapdots{display:flex;justify-content:center;align-items:center;gap:8px;margin-top:12px;flex-wrap:wrap}
+.tapdots .dot{width:16px;height:16px;border-radius:50%;border:2px solid var(--accent);background:transparent}
+.tapdots .dot.on{background:var(--accent)}
+.tapnote{font-size:14px;color:var(--soft);margin-left:4px}
+.wrow{cursor:pointer;border-radius:6px;padding-inline:4px}
+.wrow:hover{background:var(--paper)}
 /* cards */
 .flash{max-width:440px;margin:0 auto;perspective:900px}
 .fc{position:relative;height:260px;transform-style:preserve-3d;transition:transform .45s}
@@ -1708,21 +1714,40 @@ const ENG={};
 
 /* ---------- CARDS ---------- */
 function CARDS(panel,D){
-  let order=D.cards.map((c,i)=>i),i=0;
-  const fc=h('div',{class:'fc',tabindex:0,role:'button','aria-label':'Lật thẻ'});
-  const cnt=h('span',{class:'count'});
-  const draw=()=>{const c=D.cards[order[i]];fc.classList.remove('flip');fc.innerHTML='';
-    const f=h('div',{class:'face'},c[2]?h('img',{src:IMG[c[2]],alt:''}):null,h('div',{class:'en'},c[0]),h('div',{class:'hint'},'Chạm để xem nghĩa'));
-    const b=h('div',{class:'face b'},h('div',{class:'en',style:'font-size:24px'},c[0]),h('div',{class:'vi'},c[1]));
-    fc.append(f,b);cnt.textContent=(i+1)+' / '+order.length;};
-  fc.onclick=()=>fc.classList.toggle('flip');fc.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();fc.classList.toggle('flip');}};
+  const NEED=3;
+  let order=D.cards.map((c,i)=>i),i=0,taps=order.map(()=>0),lock=false,timer=null;
+  const fc=h('div',{class:'fc',tabindex:0,role:'button','aria-label':'Chạm để đọc và lật thẻ'});
+  const cnt=h('span',{class:'count'});const dots=h('div',{class:'tapdots','aria-live':'polite'});
+  const stage=h('div',{class:'flash'},fc);const fin=h('div',{class:'done-msg',hidden:true});
   const prev=h('button',{class:'btn'},'← Trước'),next=h('button',{class:'btn'},'Sau →');
-  prev.onclick=()=>{i=(i-1+order.length)%order.length;draw();};next.onclick=()=>{i=(i+1)%order.length;draw();};
-  const mix=h('button',{class:'btn ghost'},'Trộn thẻ');mix.onclick=()=>{order=shuffle(order);i=0;draw();};
-  const sp=spkBtn('', 'btn');sp.onclick=()=>say(D.cards[order[i]][0]);sp.append(' Nghe');
-  panel.append(h('div',{class:'instr'},'Đọc từ, chạm vào thẻ để xem nghĩa tiếng Việt, bấm Nghe để nghe phát âm.'),h('div',{class:'flash'},fc),h('div',{class:'cnav'},prev,cnt,next,sp,mix));
-  const wl=h('div',{class:'wlist'});D.cards.forEach(c=>wl.append(h('div',{},h('span',{},c[0]),h('span',{},c[1]))));
-  panel.append(h('h3',{style:'margin-top:22px;font-size:20px'},'Danh sách từ của bài'),wl);
+  const doneCount=()=>taps.filter(x=>x>=NEED).length;
+  const word=()=>D.cards[order[i]][0];
+  const paintDots=()=>{dots.innerHTML='';for(let k=0;k<NEED;k++)dots.append(h('span',{class:'dot'+(k<taps[i]?' on':'')}));
+    dots.append(h('span',{class:'tapnote'},taps[i]>=NEED?'Đã đọc đủ 3 lần':'Chạm thẻ và đọc theo: lần '+Math.min(taps[i]+1,NEED)+' / '+NEED));
+    next.disabled=taps[i]<NEED;cnt.textContent='Thẻ '+(i+1)+' / '+order.length+' · xong '+doneCount();};
+  const draw=()=>{const c=D.cards[order[i]];fc.classList.remove('flip');fc.innerHTML='';
+    const f=h('div',{class:'face'},c[2]?h('img',{src:IMG[c[2]],alt:''}):null,h('div',{class:'en'},c[0]),h('div',{class:'hint'},'Chạm để nghe và xem nghĩa'));
+    const b=h('div',{class:'face b'},h('div',{class:'en',style:'font-size:24px'},c[0]),h('div',{class:'vi'},c[1]));
+    fc.append(f,b);paintDots();};
+  const go=(k,speak)=>{clearTimeout(timer);lock=false;i=k;stage.hidden=false;fin.hidden=true;draw();if(speak)say(word());};
+  const finish=()=>{stage.hidden=true;fin.hidden=false;fin.innerHTML='';
+    fin.append('Em đã chạm và đọc đủ 3 lần cho cả '+order.length+' thẻ. ',h('button',{class:'btn',style:'margin-left:8px',onclick:()=>{taps=order.map(()=>0);go(0,false);}},'Đọc lại từ đầu'));
+    cnt.textContent='Đã xong '+order.length+' / '+order.length+' thẻ';dots.innerHTML='';next.disabled=true;};
+  const tap=()=>{if(lock)return;fc.classList.toggle('flip');say(word());
+    if(taps[i]>=NEED){paintDots();return;}
+    taps[i]++;paintDots();
+    if(taps[i]>=NEED){lock=true;timer=setTimeout(()=>{lock=false;
+      const nx=order.findIndex((_,k)=>k>i&&taps[k]<NEED);const any=nx>=0?nx:order.findIndex((_,k)=>taps[k]<NEED);
+      if(any<0)finish();else go(any,true);},1600);}};
+  fc.onclick=tap;fc.onkeydown=e=>{if(e.key===' '||e.key==='Enter'){e.preventDefault();tap();}};
+  prev.onclick=()=>go((i-1+order.length)%order.length,true);
+  next.onclick=()=>{if(taps[i]<NEED)return;go((i+1)%order.length,true);};
+  const mix=h('button',{class:'btn ghost'},'Trộn thẻ');mix.onclick=()=>{order=shuffle(order);taps=order.map(()=>0);go(0,false);};
+  const sp=spkBtn('', 'btn');sp.onclick=()=>say(word());sp.append(' Nghe lại');
+  panel.append(h('div',{class:'instr'},'Chạm vào thẻ: app đọc từ và lật thẻ cho em xem nghĩa tiếng Việt. Em đọc theo. Mỗi thẻ phải chạm và đọc đủ 3 lần, sau đó thẻ tự chuyển sang từ tiếp theo.'),
+    stage,fin,dots,h('div',{class:'cnav'},prev,cnt,next,sp,mix));
+  const wl=h('div',{class:'wlist'});D.cards.forEach(c=>{const r=h('div',{class:'wrow',role:'button',tabindex:0},h('span',{},c[0]),h('span',{},c[1]));r.onclick=()=>say(c[0]);r.onkeydown=e=>{if(e.key==='Enter'){say(c[0]);}};wl.append(r);});
+  panel.append(h('h3',{style:'margin-top:22px;font-size:20px'},'Danh sách từ của bài'),h('p',{class:'note',style:'margin:4px 0 0'},'Chạm vào một từ để nghe.'),wl);
   draw();
 }
 
